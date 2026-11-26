@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import CustomerLayout from './components/CustomerLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
+import Loading from './components/Loading';
 
 // Customer Pages
 import Home from './pages/Home';
@@ -30,10 +31,17 @@ import Inventory from './pages/admin/Inventory';
 import ManageReviews from './pages/admin/ManageReviews';
 import Reports from './pages/admin/Reports';
 
+function StartGate() {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return <Loading text="Loading ElectroMart..." />;
+  if (!isAuthenticated) return <Login />;
+  return <Home />;
+}
+
 function RedirectIfAuthed({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={user.role === 'ADMIN' ? '/admin' : '/'} replace />;
   return children;
 }
 
@@ -43,7 +51,8 @@ export default function App() {
       <Routes>
         {/* Customer-facing routes wrapped with Navbar + Footer */}
         <Route element={<CustomerLayout />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<StartGate />} />
+          <Route path="/shop" element={<Home />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/:id" element={<ProductDetails />} />
 
