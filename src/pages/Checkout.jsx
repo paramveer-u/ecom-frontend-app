@@ -20,6 +20,8 @@ export default function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState('RAZORPAY');
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
+  const [sandboxPayment, setSandboxPayment] = useState(null);
+  const [sandboxProcessing, setSandboxProcessing] = useState(false);
 
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [addrForm, setAddrForm] = useState({
@@ -138,6 +140,14 @@ export default function Checkout() {
         const pendingOrderId = orderRes.data.orderId;
 
         const rzpRes = await paymentService.createRazorpayOrder({ orderId: pendingOrderId });
+        if (rzpRes.data?.simulated) {
+          setSandboxPayment({
+            orderData: orderRes.data,
+            rzpPayload: rzpRes.data,
+          });
+          return;
+        }
+
         const result = await initiateRazorpay(pendingOrderId, rzpRes.data);
 
         await fetchCart();
@@ -251,6 +261,78 @@ export default function Checkout() {
           </button>
         </aside>
       </div>
+
+      {/* Razorpay Sandbox Modal (used when real Razorpay keys are not set in backend/.env) */}
+      {sandboxPayment && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(23, 36, 59, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px',
+          }}
+        >
+          <div className="card card-pad" style={{ maxWidth: '420px', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <span className="badge badge-warning">Razorpay Test Sandbox</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Order #{sandboxPayment.rzpPayload.orderNumber}</span>
+            </div>
+            <h2 style={{ fontSize: '20px', marginBottom: '6px' }}>Complete Test Payment</h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
+              Simulated Razorpay checkout is active in development mode. Confirming will mark the order paid and deduct stock in MySQL.
+            </p>
+            <div style={{ background: '#F7F8FA', padding: '14px', borderRadius: '8px', marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600 }}>Payable Amount</span>
+              <span style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--primary-navy)' }}>
+                {formatCurrency(sandboxPayment.rzpPayload.amount / 100)}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-block"
+                disabled={sandboxProcessing}
+                onClick={async () => {
+                  setSandboxProcessing(true);
+                  try {
+                    const simRes = await paymentService.simulateRazorpayPayment({
+                      razorpay_order_id: sandboxPayment.rzpPayload.razorpayOrderId,
+                    });
+                    await fetchCart();
+                    const orderData = sandboxPayment.orderData;
+                    setSandboxPayment(null);
+                    navigate('/order-success', { state: { order: { ...orderData, payment: simRes.data } } });
+                  } catch (err) {
+                    showToast(err.message || 'Payment simulation failed.', 'error');
+                  } finally {
+                    setSandboxProcessing(false);
+                  }
+                }}
+              >
+                {sandboxProcessing ? 'Verifying Payment...' : '✓ Simulate Successful Payment'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-block"
+                disabled={sandboxProcessing}
+                onClick={async () => {
+                  await paymentService.recordPaymentFailure({
+                    razorpay_order_id: sandboxPayment.rzpPayload.razorpayOrderId,
+                  }).catch(() => {});
+                  setSandboxPayment(null);
+                  showToast('Payment cancelled.', 'error');
+                }}
+              >
+                Cancel Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

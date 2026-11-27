@@ -3,6 +3,7 @@ import api from './api';
 export const paymentService = {
   createRazorpayOrder: (payload) => api.post('/payments/create-order', payload).then((r) => r.data),
   verifyRazorpayPayment: (payload) => api.post('/payments/verify', payload).then((r) => r.data),
+  simulateRazorpayPayment: (payload) => api.post('/payments/simulate-success', payload).then((r) => r.data),
   recordPaymentFailure: (payload) => api.post('/payments/failure', payload).then((r) => r.data),
 
   // Admin analytics & management APIs
